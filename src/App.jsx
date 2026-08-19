@@ -386,7 +386,11 @@ function App() {
   return (
     <div className="app-container">
       <header>
-        <div className="ribbon">NULL ZONE</div>
+        <div className="ribbon" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <Radio size={32} color="#fef08a" />
+          <span>NULL ZONE</span>
+          <Target size={32} color="#fef08a" />
+        </div>
         <div className="level-indicator">Level {currentLevelIndex + 1}</div>
       </header>
       
