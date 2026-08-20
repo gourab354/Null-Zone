@@ -2,17 +2,16 @@ import React, { useState, useEffect, useRef } from 'react';
 import { LEVELS, FREQUENCIES, checkVisibility, getDistance, generateRandomLevel, generateDescriptiveHint } from './game/engine';
 import { playPlaceSound, playRemoveSound, playErrorSound, playWinSound, playHintSound } from './game/audio';
 import { Zap, Radio, AlertTriangle, RefreshCcw, ArrowRight, Play, RotateCcw, Clock, Target, Star, Lightbulb, Unlock, LogIn, LogOut, User } from 'lucide-react';
-import { useGoogleLogin, googleLogout } from '@react-oauth/google';
 import './App.css';
 
 function App() {
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-
   const [user, setUser] = useState(() => {
     const saved = localStorage.getItem('nullZoneUser');
     return saved ? JSON.parse(saved) : null;
   });
-  const [authChecking, setAuthChecking] = useState(false);
+  const [loginName, setLoginName] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
   const [currentLevelIndex, setCurrentLevelIndex] = useState(0);
   const [level, setLevel] = useState(LEVELS[0]);
   const [placedDevices, setPlacedDevices] = useState([]);
@@ -36,42 +35,43 @@ function App() {
     }
   }, []);
 
-  const login = useGoogleLogin({
-    onSuccess: async (tokenResponse) => {
-      setAuthChecking(true);
-      try {
-        const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-          headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
-        });
-        const userInfo = await userInfoRes.json();
-        
-        const res = await fetch(`${API_URL}/api/auth/google`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(userInfo)
-        });
-        const data = await res.json();
-        if (data.user) {
-          setUser(data.user);
-          setCurrentLevelIndex(data.user.currentLevelIndex || 0);
-          localStorage.setItem('nullZoneUser', JSON.stringify(data.user));
+  const handleLogin = (e) => {
+    e.preventDefault();
+    if (!loginName.trim() || !loginPassword) return;
+    
+    const name = loginName.trim();
+    const allUsersStr = localStorage.getItem('nullZoneAllUsers');
+    let allUsers = allUsersStr ? JSON.parse(allUsersStr) : {};
+    
+    let loggedInUser;
+    
+    if (allUsers[name]) {
+        // User exists, check password
+        if (allUsers[name].password !== loginPassword) {
+            setLoginError('Incorrect password!');
+            return;
         }
-      } catch (error) {
-        console.error("Login failed:", error);
-      }
-      setAuthChecking(false);
+        loggedInUser = allUsers[name];
+    } else {
+        // New user, register them
+        loggedInUser = { name, password: loginPassword, currentLevelIndex: 0 };
+        allUsers[name] = loggedInUser;
+        localStorage.setItem('nullZoneAllUsers', JSON.stringify(allUsers));
     }
-  });
-
-  const handleLogin = () => {
-    login();
+    
+    setLoginError('');
+    setUser(loggedInUser);
+    setCurrentLevelIndex(loggedInUser.currentLevelIndex);
+    localStorage.setItem('nullZoneUser', JSON.stringify(loggedInUser));
   };
 
   const handleLogout = () => {
-    googleLogout();
     setUser(null);
     setCurrentLevelIndex(0);
     localStorage.removeItem('nullZoneUser');
+    setLoginName('');
+    setLoginPassword('');
+    setLoginError('');
   };
 
   // Reset state when level changes
@@ -437,15 +437,10 @@ function App() {
       setUser(updatedUser);
       localStorage.setItem('nullZoneUser', JSON.stringify(updatedUser));
       
-      try {
-        await fetch(`${API_URL}/api/level`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ googleId: user.googleId, levelIndex: nextIndex })
-        });
-      } catch (error) {
-        console.error("Error saving level:", error);
-      }
+      const allUsersStr = localStorage.getItem('nullZoneAllUsers');
+      let allUsers = allUsersStr ? JSON.parse(allUsersStr) : {};
+      allUsers[updatedUser.name] = updatedUser;
+      localStorage.setItem('nullZoneAllUsers', JSON.stringify(allUsers));
     }
   };
 
@@ -454,24 +449,62 @@ function App() {
     setIsWin(false);
   };
 
-  if (authChecking) {
-    return (
-      <div className="app-container" style={{justifyContent: 'center', alignItems: 'center'}}>
-        <div className="ribbon" style={{fontSize: '2rem'}}>Checking Login...</div>
-      </div>
-    );
-  }
-
   if (!user) {
     return (
       <div className="app-container" style={{justifyContent: 'center', alignItems: 'center'}}>
         <div className="scoreboard-modal" style={{position: 'relative', transform: 'none', top: 'auto', left: 'auto', width: '400px', textAlign: 'center'}}>
           <div className="scoreboard-ribbon">NULL ZONE</div>
           <h2 style={{color: '#92400e', marginTop: '2rem', marginBottom: '1rem', fontSize: '1.5rem'}}>Welcome to Null Zone</h2>
-          <p style={{color: '#a16207', marginBottom: '2rem', fontWeight: 'bold'}}>You must log in to play and save your progress!</p>
-          <button className="btn green" style={{width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '1rem', fontSize: '1.2rem'}} onClick={handleLogin}>
-            <LogIn size={24} style={{marginRight: '10px'}} /> Login with Google
-          </button>
+          <p style={{color: '#a16207', marginBottom: '1.5rem', fontWeight: 'bold'}}>Create an ID & Password to save your progress!</p>
+          
+          <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+            {loginError && <div style={{color: 'red', fontWeight: 'bold', marginBottom: '-10px'}}>{loginError}</div>}
+            <input 
+              type="text" 
+              placeholder="Your ID / Username" 
+              value={loginName}
+              onChange={(e) => {
+                  setLoginName(e.target.value);
+                  setLoginError('');
+              }}
+              style={{
+                padding: '12px',
+                fontSize: '1.1rem',
+                borderRadius: '8px',
+                border: '2px solid #d97706',
+                outline: 'none',
+                backgroundColor: '#fef3c7',
+                color: '#92400e',
+                fontWeight: 'bold',
+                textAlign: 'center'
+              }}
+              required
+            />
+            <input 
+              type="password" 
+              placeholder="Your Password" 
+              value={loginPassword}
+              onChange={(e) => {
+                  setLoginPassword(e.target.value);
+                  setLoginError('');
+              }}
+              style={{
+                padding: '12px',
+                fontSize: '1.1rem',
+                borderRadius: '8px',
+                border: '2px solid #d97706',
+                outline: 'none',
+                backgroundColor: '#fef3c7',
+                color: '#92400e',
+                fontWeight: 'bold',
+                textAlign: 'center'
+              }}
+              required
+            />
+            <button type="submit" className="btn green" style={{width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '1rem', fontSize: '1.2rem'}}>
+              <LogIn size={24} style={{marginRight: '10px'}} /> Login
+            </button>
+          </form>
         </div>
       </div>
     );
@@ -491,12 +524,8 @@ function App() {
           
           <div className="auth-container">
               <div className="user-profile">
-                {user.picture ? (
-                  <img src={user.picture} alt="Profile" className="user-avatar" />
-                ) : (
-                  <User size={24} color="#fff" />
-                )}
-                <span className="user-name">{user.name?.split(' ')[0]}</span>
+                <User size={24} color="#fff" />
+                <span className="user-name">{user.name}</span>
                 <button className="auth-btn logout" onClick={handleLogout} title="Logout">
                   <LogOut size={18} />
                 </button>
