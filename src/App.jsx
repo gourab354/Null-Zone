@@ -2,14 +2,17 @@ import React, { useState, useEffect, useRef } from 'react';
 import { LEVELS, FREQUENCIES, checkVisibility, getDistance, generateRandomLevel, generateDescriptiveHint } from './game/engine';
 import { playPlaceSound, playRemoveSound, playErrorSound, playWinSound, playHintSound } from './game/audio';
 import { Zap, Radio, AlertTriangle, RefreshCcw, ArrowRight, Play, RotateCcw, Clock, Target, Star, Lightbulb, Unlock, LogIn, LogOut, User } from 'lucide-react';
-import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { auth, googleProvider, db } from './firebase';
+import { useGoogleLogin, googleLogout } from '@react-oauth/google';
 import './App.css';
 
 function App() {
-  const [user, setUser] = useState(null);
-  const [authChecking, setAuthChecking] = useState(true);
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
+  const [user, setUser] = useState(() => {
+    const saved = localStorage.getItem('nullZoneUser');
+    return saved ? JSON.parse(saved) : null;
+  });
+  const [authChecking, setAuthChecking] = useState(false);
   const [currentLevelIndex, setCurrentLevelIndex] = useState(0);
   const [level, setLevel] = useState(LEVELS[0]);
   const [placedDevices, setPlacedDevices] = useState([]);
@@ -26,47 +29,49 @@ function App() {
 
   const obstaclesSet = new Set(level.obstacles.map(o => `${o.x},${o.y}`));
 
-  // Handle Firebase Auth
+  // Set current level from local storage on mount if user exists
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
-      if (currentUser) {
-        // Fetch saved level
-        try {
-          const userDocRef = doc(db, 'users', currentUser.uid);
-          const userDoc = await getDoc(userDocRef);
-          if (userDoc.exists()) {
-            const data = userDoc.data();
-            if (data.currentLevelIndex !== undefined) {
-              setCurrentLevelIndex(data.currentLevelIndex);
-            }
-          }
-        } catch (error) {
-          console.error("Error fetching user data:", error);
-        }
-      } else {
-        setCurrentLevelIndex(0);
-      }
-      setAuthChecking(false);
-    });
-
-    return () => unsubscribe();
+    if (user && user.currentLevelIndex !== undefined) {
+      setCurrentLevelIndex(user.currentLevelIndex);
+    }
   }, []);
 
-  const handleLogin = async () => {
-    try {
-      await signInWithPopup(auth, googleProvider);
-    } catch (error) {
-      console.error("Login failed:", error);
+  const login = useGoogleLogin({
+    onSuccess: async (tokenResponse) => {
+      setAuthChecking(true);
+      try {
+        const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+          headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
+        });
+        const userInfo = await userInfoRes.json();
+        
+        const res = await fetch(`${API_URL}/api/auth/google`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(userInfo)
+        });
+        const data = await res.json();
+        if (data.user) {
+          setUser(data.user);
+          setCurrentLevelIndex(data.user.currentLevelIndex || 0);
+          localStorage.setItem('nullZoneUser', JSON.stringify(data.user));
+        }
+      } catch (error) {
+        console.error("Login failed:", error);
+      }
+      setAuthChecking(false);
     }
+  });
+
+  const handleLogin = () => {
+    login();
   };
 
-  const handleLogout = async () => {
-    try {
-      await signOut(auth);
-    } catch (error) {
-      console.error("Logout failed:", error);
-    }
+  const handleLogout = () => {
+    googleLogout();
+    setUser(null);
+    setCurrentLevelIndex(0);
+    localStorage.removeItem('nullZoneUser');
   };
 
   // Reset state when level changes
@@ -427,9 +432,17 @@ function App() {
     setCurrentLevelIndex(nextIndex);
     
     if (user) {
+      // Update local storage
+      const updatedUser = { ...user, currentLevelIndex: nextIndex };
+      setUser(updatedUser);
+      localStorage.setItem('nullZoneUser', JSON.stringify(updatedUser));
+      
       try {
-        const userDocRef = doc(db, 'users', user.uid);
-        await setDoc(userDocRef, { currentLevelIndex: nextIndex }, { merge: true });
+        await fetch(`${API_URL}/api/level`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ googleId: user.googleId, levelIndex: nextIndex })
+        });
       } catch (error) {
         console.error("Error saving level:", error);
       }
@@ -478,12 +491,12 @@ function App() {
           
           <div className="auth-container">
               <div className="user-profile">
-                {user.photoURL ? (
-                  <img src={user.photoURL} alt="Profile" className="user-avatar" />
+                {user.picture ? (
+                  <img src={user.picture} alt="Profile" className="user-avatar" />
                 ) : (
                   <User size={24} color="#fff" />
                 )}
-                <span className="user-name">{user.displayName?.split(' ')[0]}</span>
+                <span className="user-name">{user.name?.split(' ')[0]}</span>
                 <button className="auth-btn logout" onClick={handleLogout} title="Logout">
                   <LogOut size={18} />
                 </button>
