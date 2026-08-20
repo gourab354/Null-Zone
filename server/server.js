@@ -18,10 +18,15 @@ mongoose.connect(process.env.MONGODB_URI)
 
 // Auth Route
 app.post('/api/auth/google', async (req, res) => {
+  console.log("Received login request", req.body);
   try {
     const { sub, email, name, picture } = req.body;
-    if (!sub) return res.status(400).json({ error: "Missing user info" });
+    if (!sub) {
+      console.log("Missing sub in request body");
+      return res.status(400).json({ error: "Missing user info" });
+    }
 
+    console.log("Finding user in DB:", sub);
     // Find or create user
     let user = await User.findOne({ googleId: sub });
     if (!user) {
