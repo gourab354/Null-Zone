@@ -393,3 +393,62 @@ canvas {
   text-shadow: 2px 2px 0 #991b1b;
   margin-left: 2rem;
 }
+
+/* Auth Styles */
+.auth-container {
+  display: flex;
+  align-items: center;
+}
+
+.auth-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  background: rgba(0, 0, 0, 0.2);
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.auth-btn:hover {
+  background: rgba(0, 0, 0, 0.4);
+  transform: translateY(-2px);
+}
+
+.user-profile {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: rgba(0, 0, 0, 0.15);
+  padding: 0.25rem 0.25rem 0.25rem 1rem;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.user-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid white;
+}
+
+.user-name {
+  color: white;
+  font-weight: 600;
+  text-shadow: 1px 1px 0 rgba(0,0,0,0.3);
+}
+
+.auth-btn.logout {
+  padding: 0.5rem;
+  border-radius: 50%;
+  border: none;
+  background: #ef4444;
+}
+
+.auth-btn.logout:hover {
+  background: #dc2626;
+}

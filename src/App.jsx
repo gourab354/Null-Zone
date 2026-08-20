@@ -1,10 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { LEVELS, FREQUENCIES, checkVisibility, getDistance, generateRandomLevel, generateDescriptiveHint } from './game/engine';
 import { playPlaceSound, playRemoveSound, playErrorSound, playWinSound, playHintSound } from './game/audio';
-import { Zap, Radio, AlertTriangle, RefreshCcw, ArrowRight, Play, RotateCcw, Clock, Target, Star, Lightbulb, Unlock } from 'lucide-react';
+import { Zap, Radio, AlertTriangle, RefreshCcw, ArrowRight, Play, RotateCcw, Clock, Target, Star, Lightbulb, Unlock, LogIn, LogOut, User } from 'lucide-react';
+import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { auth, googleProvider, db } from './firebase';
 import './App.css';
 
 function App() {
+  const [user, setUser] = useState(null);
   const [currentLevelIndex, setCurrentLevelIndex] = useState(0);
   const [level, setLevel] = useState(LEVELS[0]);
   const [placedDevices, setPlacedDevices] = useState([]);
@@ -20,6 +24,48 @@ function App() {
   const TILE_SIZE = 50;
 
   const obstaclesSet = new Set(level.obstacles.map(o => `${o.x},${o.y}`));
+
+  // Handle Firebase Auth
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setUser(currentUser);
+      if (currentUser) {
+        // Fetch saved level
+        try {
+          const userDocRef = doc(db, 'users', currentUser.uid);
+          const userDoc = await getDoc(userDocRef);
+          if (userDoc.exists()) {
+            const data = userDoc.data();
+            if (data.currentLevelIndex !== undefined) {
+              setCurrentLevelIndex(data.currentLevelIndex);
+            }
+          }
+        } catch (error) {
+          console.error("Error fetching user data:", error);
+        }
+      } else {
+        setCurrentLevelIndex(0);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const handleLogin = async () => {
+    try {
+      await signInWithPopup(auth, googleProvider);
+    } catch (error) {
+      console.error("Login failed:", error);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+    } catch (error) {
+      console.error("Logout failed:", error);
+    }
+  };
 
   // Reset state when level changes
   useEffect(() => {
@@ -374,8 +420,18 @@ function App() {
     setIsWin(false);
   };
 
-  const nextLevel = () => {
-    setCurrentLevelIndex(prev => prev + 1);
+  const nextLevel = async () => {
+    const nextIndex = currentLevelIndex + 1;
+    setCurrentLevelIndex(nextIndex);
+    
+    if (user) {
+      try {
+        const userDocRef = doc(db, 'users', user.uid);
+        await setDoc(userDocRef, { currentLevelIndex: nextIndex }, { merge: true });
+      } catch (error) {
+        console.error("Error saving level:", error);
+      }
+    }
   };
 
   const retryLevel = () => {
@@ -391,7 +447,30 @@ function App() {
           <span>NULL ZONE</span>
           <Target size={32} color="#fef08a" />
         </div>
-        <div className="level-indicator">Level {currentLevelIndex + 1}</div>
+        
+        <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+          <div className="level-indicator">Level {currentLevelIndex + 1}</div>
+          
+          <div className="auth-container">
+            {user ? (
+              <div className="user-profile">
+                {user.photoURL ? (
+                  <img src={user.photoURL} alt="Profile" className="user-avatar" />
+                ) : (
+                  <User size={24} color="#fff" />
+                )}
+                <span className="user-name">{user.displayName?.split(' ')[0]}</span>
+                <button className="auth-btn logout" onClick={handleLogout} title="Logout">
+                  <LogOut size={18} />
+                </button>
+              </div>
+            ) : (
+              <button className="auth-btn login" onClick={handleLogin}>
+                <LogIn size={18} /> Login
+              </button>
+            )}
+          </div>
+        </div>
       </header>
       
       <div className="game-layout">
