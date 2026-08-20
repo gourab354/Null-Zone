@@ -9,6 +9,7 @@ import './App.css';
 
 function App() {
   const [user, setUser] = useState(null);
+  const [authChecking, setAuthChecking] = useState(true);
   const [currentLevelIndex, setCurrentLevelIndex] = useState(0);
   const [level, setLevel] = useState(LEVELS[0]);
   const [placedDevices, setPlacedDevices] = useState([]);
@@ -46,6 +47,7 @@ function App() {
       } else {
         setCurrentLevelIndex(0);
       }
+      setAuthChecking(false);
     });
 
     return () => unsubscribe();
@@ -439,6 +441,29 @@ function App() {
     setIsWin(false);
   };
 
+  if (authChecking) {
+    return (
+      <div className="app-container" style={{justifyContent: 'center', alignItems: 'center'}}>
+        <div className="ribbon" style={{fontSize: '2rem'}}>Checking Login...</div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="app-container" style={{justifyContent: 'center', alignItems: 'center'}}>
+        <div className="scoreboard-modal" style={{position: 'relative', transform: 'none', top: 'auto', left: 'auto', width: '400px', textAlign: 'center'}}>
+          <div className="scoreboard-ribbon">NULL ZONE</div>
+          <h2 style={{color: '#92400e', marginTop: '2rem', marginBottom: '1rem', fontSize: '1.5rem'}}>Welcome to Null Zone</h2>
+          <p style={{color: '#a16207', marginBottom: '2rem', fontWeight: 'bold'}}>You must log in to play and save your progress!</p>
+          <button className="btn green" style={{width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '1rem', fontSize: '1.2rem'}} onClick={handleLogin}>
+            <LogIn size={24} style={{marginRight: '10px'}} /> Login with Google
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="app-container">
       <header>
@@ -452,7 +477,6 @@ function App() {
           <div className="level-indicator">Level {currentLevelIndex + 1}</div>
           
           <div className="auth-container">
-            {user ? (
               <div className="user-profile">
                 {user.photoURL ? (
                   <img src={user.photoURL} alt="Profile" className="user-avatar" />
@@ -464,11 +488,6 @@ function App() {
                   <LogOut size={18} />
                 </button>
               </div>
-            ) : (
-              <button className="auth-btn login" onClick={handleLogin}>
-                <LogIn size={18} /> Login
-              </button>
-            )}
           </div>
         </div>
       </header>
